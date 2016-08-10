@@ -12,6 +12,8 @@ wire [7:0] rx_data;
 wire tx_empty;
 reg [7:0] tx_data;
 
+wire t;
+
 initial begin
     $dumpfile("spi_slave.vcd");
     $dumpvars;
@@ -104,7 +106,8 @@ spi_slave U0 (
     .rx_data_available(rx_data_available),
     .rx_data(rx_data),
     .tx_empty(tx_empty),
-    .tx_data(tx_data)
+    .tx_data(tx_data),
+    .led(t)
 );
 
 endmodule
