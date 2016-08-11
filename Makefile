@@ -38,7 +38,7 @@ QUARTUS_PGM=quartus_pgm
 ###################################################################
 # Setup your sources here
 
-SRCS = src/main.v src/spi_slave.v
+SRCS = src/main.v src/spi_slave.v src/pwm.v
 
 ###################################################################
 # Main Targets
