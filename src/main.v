@@ -1,3 +1,7 @@
+`define STATE_IDLE 0
+`define STATE_BYTE0 1
+`define STATE_BYTE1 2
+
 module main(
     clk,
     sclk,
@@ -37,7 +41,7 @@ reg [7 : 0] rx_previous_byte;
 reg [3 : 0] pwm_ch;
 reg pwm_select_duty_cycle;
 reg pwm_write;
-typedef enum { IDLE = 0, BYTE0, BYTE1 } state;
+reg [1 : 0] state;
 reg old_spi_rx_byte_available;
 
 //debug
@@ -73,14 +77,14 @@ end
 // state machine
 always @ (posedge clk) begin
     if (ss == 1) begin
-        state <= IDLE;
+        state <= `STATE_IDLE;
     end else begin
         if (old_spi_rx_byte_available == 0) begin
             if (spi_rx_byte_available == 1) begin
                 //data available
                 
                 case (state)
-                    IDLE: begin
+                    `STATE_IDLE: begin
                         pwm_ch[0] <= spi_rx_byte[0];
                         pwm_ch[1] <= spi_rx_byte[1];
                         pwm_ch[2] <= spi_rx_byte[2];
@@ -89,16 +93,34 @@ always @ (posedge clk) begin
                         pwm_select_duty_cycle <= spi_rx_byte[4];
                         pwm_write <= spi_rx_byte[5];
                         //TODO handle read
-                        state <= BYTE0;
+                        state <= `STATE_BYTE0;
+                        
+                        spi_tx_byte[0] <= pwm0_duty_cycle_usec[0];
+                        spi_tx_byte[1] <= pwm0_duty_cycle_usec[1];
+                        spi_tx_byte[2] <= pwm0_duty_cycle_usec[2];
+                        spi_tx_byte[3] <= pwm0_duty_cycle_usec[3];
+                        spi_tx_byte[4] <= pwm0_duty_cycle_usec[4];
+                        spi_tx_byte[5] <= pwm0_duty_cycle_usec[5];
+                        spi_tx_byte[6] <= pwm0_duty_cycle_usec[6];
+                        spi_tx_byte[7] <= pwm0_duty_cycle_usec[7];
                     end
-                    BYTE0: begin
+                    `STATE_BYTE0: begin
                         led0_pin <= !spi_rx_byte[0];
                         led1_pin <= !spi_rx_byte[1];
                         led2_pin <= !spi_rx_byte[2];
-                        led3_pin <= !spi_rx_byte[3];
-                        state <= BYTE1;
+                        led3_pin <= !spi_rx_byte[3];                        
+                        state <= `STATE_BYTE1;
+
+                        spi_tx_byte[0] <= pwm0_duty_cycle_usec[8];
+                        spi_tx_byte[1] <= pwm0_duty_cycle_usec[9];
+                        spi_tx_byte[2] <= pwm0_duty_cycle_usec[10];
+                        spi_tx_byte[3] <= pwm0_duty_cycle_usec[11];
+                        spi_tx_byte[4] <= pwm0_duty_cycle_usec[12];
+                        spi_tx_byte[5] <= pwm0_duty_cycle_usec[13];
+                        spi_tx_byte[6] <= pwm0_duty_cycle_usec[14];
+                        spi_tx_byte[7] <= pwm0_duty_cycle_usec[15];
                     end
-                    BYTE1: begin
+                    `STATE_BYTE1: begin
                         pwm0_duty_cycle_usec[0] <= rx_previous_byte[0];
                         pwm0_duty_cycle_usec[1] <= rx_previous_byte[1];
                         pwm0_duty_cycle_usec[2] <= rx_previous_byte[2];
@@ -115,7 +137,7 @@ always @ (posedge clk) begin
                         pwm0_duty_cycle_usec[13] <= spi_rx_byte[5];
                         pwm0_duty_cycle_usec[14] <= spi_rx_byte[6];
                         pwm0_duty_cycle_usec[15] <= spi_rx_byte[7];
-                        state <= BYTE0;
+                        state <= `STATE_BYTE0;
                         pwm_ch <= pwm_ch + 1;
                     end
                 endcase
@@ -126,10 +148,6 @@ always @ (posedge clk) begin
     end
 
     old_spi_rx_byte_available <= spi_rx_byte_available;
-end
-
-always @ (posedge spi_tx_ready_to_write) begin
-    spi_tx_byte <= spi_rx_byte + 1;
 end
 
 endmodule
