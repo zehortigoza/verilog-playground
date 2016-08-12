@@ -1,3 +1,7 @@
 iverilog src/spi_slave.v test/spi_slave.v 
 ./a.out
 gtkwave spi_slave.vcd
+
+
+#Usage info
+aero_fpga.fit.rpt

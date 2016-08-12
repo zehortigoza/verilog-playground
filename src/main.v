@@ -1,7 +1,3 @@
-`define STATE_IDLE 0
-`define STATE_BYTE0 1
-`define STATE_BYTE1 2
-
 module main(
     clk,
     sclk,
@@ -32,17 +28,18 @@ wire spi_tx_ready_to_write;
 reg [7 : 0] spi_tx_byte;
 
 // PWM0
-reg [15 : 0] pwm0_freq = 490;
-reg [15 : 0] pwm0_duty_cycle_usec = 1250;
+reg [15 : 0] pwm0_freq = 400;
+reg [15 : 0] pwm0_duty_cycle_usec = 0;
 output wire pwm0_pin;
 
 //state machine data
-reg [7 : 0] rx_previous_byte;
-reg [3 : 0] pwm_ch;
-reg pwm_select_duty_cycle;
-reg pwm_write;
-reg [1 : 0] state;
 reg old_spi_rx_byte_available;
+reg state_idle;
+reg state_duty_cyle;
+reg state_write;
+reg state_byte1;
+reg [3 : 0] pwm_ch;
+reg [7 : 0] byte_buffer;
 
 //debug
 output reg led0_pin = 1;
@@ -77,77 +74,82 @@ end
 // state machine
 always @ (posedge clk) begin
     if (ss == 1) begin
-        state <= `STATE_IDLE;
+        state_idle <= 1;
     end else begin
         if (old_spi_rx_byte_available == 0) begin
             if (spi_rx_byte_available == 1) begin
-                //data available
-                
-                case (state)
-                    `STATE_IDLE: begin
-                        pwm_ch[0] <= spi_rx_byte[0];
-                        pwm_ch[1] <= spi_rx_byte[1];
-                        pwm_ch[2] <= spi_rx_byte[2];
-                        pwm_ch[3] <= spi_rx_byte[3];
-                        //TODO handle channels
-                        pwm_select_duty_cycle <= spi_rx_byte[4];
-                        pwm_write <= spi_rx_byte[5];
-                        //TODO handle read
-                        state <= `STATE_BYTE0;
-                        
-                        spi_tx_byte[0] <= pwm0_duty_cycle_usec[0];
-                        spi_tx_byte[1] <= pwm0_duty_cycle_usec[1];
-                        spi_tx_byte[2] <= pwm0_duty_cycle_usec[2];
-                        spi_tx_byte[3] <= pwm0_duty_cycle_usec[3];
-                        spi_tx_byte[4] <= pwm0_duty_cycle_usec[4];
-                        spi_tx_byte[5] <= pwm0_duty_cycle_usec[5];
-                        spi_tx_byte[6] <= pwm0_duty_cycle_usec[6];
-                        spi_tx_byte[7] <= pwm0_duty_cycle_usec[7];
-                    end
-                    `STATE_BYTE0: begin
-                        led0_pin <= !spi_rx_byte[0];
-                        led1_pin <= !spi_rx_byte[1];
-                        led2_pin <= !spi_rx_byte[2];
-                        led3_pin <= !spi_rx_byte[3];                        
-                        state <= `STATE_BYTE1;
+                // SPI byte available
 
-                        spi_tx_byte[0] <= pwm0_duty_cycle_usec[8];
-                        spi_tx_byte[1] <= pwm0_duty_cycle_usec[9];
-                        spi_tx_byte[2] <= pwm0_duty_cycle_usec[10];
-                        spi_tx_byte[3] <= pwm0_duty_cycle_usec[11];
-                        spi_tx_byte[4] <= pwm0_duty_cycle_usec[12];
-                        spi_tx_byte[5] <= pwm0_duty_cycle_usec[13];
-                        spi_tx_byte[6] <= pwm0_duty_cycle_usec[14];
-                        spi_tx_byte[7] <= pwm0_duty_cycle_usec[15];
+                if (state_idle == 1) begin
+                    pwm_ch <= spi_rx_byte[0 +: 4];
+                    state_idle <= 0;
+                    state_duty_cyle <= spi_rx_byte[4];
+                    state_write <= spi_rx_byte[5];
+                    state_byte1 <= 0;
+                    
+                    //if it is a read operation need to push the first byte now
+                    if (spi_rx_byte[5] == 0) begin
+                        if (spi_rx_byte[4] == 1) begin
+                            spi_tx_byte <= pwm0_duty_cycle_usec[0 +: 8];
+                        end else begin
+                            spi_tx_byte <= pwm0_freq[0 +: 8];
+                        end
                     end
-                    `STATE_BYTE1: begin
-                        pwm0_duty_cycle_usec[0] <= rx_previous_byte[0];
-                        pwm0_duty_cycle_usec[1] <= rx_previous_byte[1];
-                        pwm0_duty_cycle_usec[2] <= rx_previous_byte[2];
-                        pwm0_duty_cycle_usec[3] <= rx_previous_byte[3];
-                        pwm0_duty_cycle_usec[4] <= rx_previous_byte[4];
-                        pwm0_duty_cycle_usec[5] <= rx_previous_byte[5];
-                        pwm0_duty_cycle_usec[6] <= rx_previous_byte[6];
-                        pwm0_duty_cycle_usec[7] <= rx_previous_byte[7];
-                        pwm0_duty_cycle_usec[8] <= spi_rx_byte[0];
-                        pwm0_duty_cycle_usec[9] <= spi_rx_byte[1];
-                        pwm0_duty_cycle_usec[10] <= spi_rx_byte[2];
-                        pwm0_duty_cycle_usec[11] <= spi_rx_byte[3];
-                        pwm0_duty_cycle_usec[12] <= spi_rx_byte[4];
-                        pwm0_duty_cycle_usec[13] <= spi_rx_byte[5];
-                        pwm0_duty_cycle_usec[14] <= spi_rx_byte[6];
-                        pwm0_duty_cycle_usec[15] <= spi_rx_byte[7];
-                        state <= `STATE_BYTE0;
-                        pwm_ch <= pwm_ch + 1;
-                    end
-                endcase
+                end // "if (state_idle == 1)"
                 
-                rx_previous_byte <= spi_rx_byte;
-            end
-        end
-    end
+                if (state_idle == 0) begin
+                    if (state_byte1 == 0) begin
+                        state_byte1 <= 1;
+
+                        if (state_write == 1) begin
+                            byte_buffer <= spi_rx_byte;
+                        end
+                        
+                        if (state_write == 0) begin
+                            if (state_duty_cyle == 1) begin
+                                spi_tx_byte <= pwm0_duty_cycle_usec[8 +: 8];
+                            end else begin
+                                spi_tx_byte <= pwm0_freq[8 +: 8];
+                            end
+
+                            // increment channel counter
+                            pwm_ch <= pwm_ch + 1;
+                        end
+                    end // "if (state_byte1 == 0)"
+                    
+                    if (state_byte1 == 1) begin
+                        state_byte1 <= 0;
+
+                        if (state_write == 1) begin
+                            if (state_duty_cyle == 1) begin
+                                pwm0_duty_cycle_usec[0 +: 8] <= byte_buffer;
+                                pwm0_duty_cycle_usec[8 +: 8] <= spi_rx_byte;
+                            end else begin
+                                pwm0_freq[0 +: 8] <= byte_buffer;
+                                pwm0_freq[8 +: 8] <= spi_rx_byte;
+                            end
+
+                            // increment channel counter
+                            pwm_ch <= pwm_ch + 1;
+                        end
+
+                        if (state_write == 0) begin
+                            // start sending the first byte of the next channel
+                            if (state_duty_cyle == 1) begin
+                                spi_tx_byte <= pwm0_duty_cycle_usec[0 +: 8];
+                            end else begin
+                                spi_tx_byte <= pwm0_freq[0 +: 8];
+                            end
+                        end
+
+                    end // "if (state_byte1 == 1)"
+                end // "if (state_idle == 0)"
+
+            end // "if (spi_rx_byte_available == 1)"
+        end // "if (old_spi_rx_byte_available == 0)"
+    end // "if (ss == 1)" else
 
     old_spi_rx_byte_available <= spi_rx_byte_available;
-end
+end // alwasys
 
 endmodule
